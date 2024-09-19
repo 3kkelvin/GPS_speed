@@ -1,12 +1,18 @@
 #include <HardwareSerial.h>
 #include <WiFi.h>
+#include <TM1637Display.h>
+
 #define DEBUGSerial Serial
+#define CLK 26
+#define DIO 27
+
 const char* ssid = "mmslab_smallRoom";
 const char* password = "mmslab406";
 const char* host = "140.124.73.173";
 const uint16_t port = 12345;
 HardwareSerial GPSSerial(1);
 WiFiClient client;
+TM1637Display display(CLK, DIO);
 
 String latitude = "";
 String longitude = "";
@@ -21,6 +27,7 @@ void setup() {
   GPSSerial.begin(115200, SERIAL_8N1, 33, 25);
   DEBUGSerial.begin(115200);
   DEBUGSerial.println("Wating...");
+  display.setBrightness(0x0f); // 顯示亮度
   //連線WIFI
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -59,6 +66,7 @@ void loop() {
         DEBUGSerial.println("Reconnected to server");
       }
     }
+    displaySpeed();
   }
 }
 
@@ -89,4 +97,28 @@ void parseRMC(String line) {//讀取其中的UTC時間 速度
     commaIndex = line.indexOf(',', commaIndex + 1);
   }
   gpsDate = line.substring(commaIndex + 1, line.indexOf(',', commaIndex + 1));
+}
+
+void displaySpeed() {
+  float speedValue = speed.toFloat();
+  int intPart = (int)speedValue;
+  int decimalPart = (int)((speedValue - intPart) * 10); // 只取小數點後一位
+
+  uint8_t data[] = {0, 0, 0, 0};
+
+  if (intPart >= 100) {
+    data[0] = display.encodeDigit((intPart / 100) % 10);
+    data[1] = display.encodeDigit((intPart / 10) % 10);
+    data[2] = display.encodeDigit(intPart % 10) | 0x80; // 加上小數點
+    data[3] = display.encodeDigit(decimalPart);
+  } else if (intPart >= 10) {
+    data[1] = display.encodeDigit((intPart / 10) % 10);
+    data[2] = display.encodeDigit(intPart % 10) | 0x80; // 加上小數點
+    data[3] = display.encodeDigit(decimalPart);
+  } else {
+    data[2] = display.encodeDigit(intPart % 10) | 0x80; // 加上小數點
+    data[3] = display.encodeDigit(decimalPart);
+  }
+
+  display.setSegments(data);
 }
